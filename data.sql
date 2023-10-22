@@ -1,93 +1,4 @@
-create schema if not exists azure_company;
-use azure_company;
-
--- Criação das tabelas 
-
-CREATE TABLE employee(
-    Ssn char(9) not null primary key,
-    Fname varchar(15) not null,
-    Minit char,
-    Lname varchar(15) not null,
-    Bdate date,
-    Address varchar(30),
-    Sex char,
-    Salary decimal(10,2),
-    SupervisorSsn char(9),
-    Dno int not null
-);
-
-create table departament(
-    Dname varchar(15) not null,
-    Dnumber int not null primary key,
-    Mgr_ssn char(9) not null,
-    Mgr_start_date date, 
-    Dept_create_date date,
-    unique(Dname)
-);
-
-create table dept_locations(
-    Dnumber int not null,
-    Dlocation varchar(15) not null,
-    primary key (Dnumber, Dlocation),
-    foreign key (Dnumber) references departament(Dnumber)
-    on delete cascade
-    on update cascade
-);
-
-create table project(
-    Pname varchar(15) not null,
-    Pnumber int not null primary key,
-    Plocation varchar(15),
-    Dnum int not null,
-    foreign key (Dnum) references departament(Dnumber)
-);
-
-create table works_on(
-    Essn char(9) not null,
-    Pno int not null,
-    Hours decimal(3,1) not null,
-    foreign key (Essn) references employee(Ssn),
-    foreign key (Pno) references project(Pnumber)
-);
-
-create table dependent(
-    Essn char(9) not null,
-    Dependent_name varchar(15) not null,
-    Sex char,
-    Bdate date,
-    Relationship varchar(8),
-    primary key (Essn, Dependent_name),
-    foreign key (Essn) references employee(Ssn)
-);
-
--- Alterar tabelas
-
-alter table employee
-    add constraint chk_salary_employee check (Salary > 2000.0);
-
--- Criação do índice na coluna Ssn da tabela employee
-CREATE INDEX idx_employee_Ssn ON employee (Ssn);
-
--- Criação do índice na coluna SupervisorSsn da tabela employee
-CREATE INDEX idx_employee_SupervisorSsn ON employee (SupervisorSsn);
-
--- Adição da restrição de chave estrangeira
-alter table employee
-    add constraint fk_employee 
-    foreign key (SupervisorSsn) references employee(Ssn)
-    on delete set null
-    on update cascade;
-
-alter table employee modify Dno int not null default 1;
-
-alter table departament
-    add constraint chk_date_dept check (Dept_create_date < Mgr_start_date);
-
-alter table departament 
-    add constraint fk_dept foreign key (Mgr_ssn) references employee(Ssn)
-    on update cascade;
-
--- Inserção de dados (o restante do seu código permanece inalterado)
+use company_constraints;
 
 insert into employee values ('John', 'B', 'Smith', 123456789, '1965-01-09', '731-Fondren-Houston-TX', 'M', 30000, 333445555, 5),
 							('Franklin', 'T', 'Wong', 333445555, '1955-12-08', '638-Voss-Houston-TX', 'M', 40000, 888665555, 5),
@@ -140,3 +51,85 @@ insert into works_on values (123456789, 1, 32.5),
                             (987654321, 30, 20.0),
                             (987654321, 20, 15.0),
                             (888665555, 20, 0.0);
+
+-- Consultas SQL
+
+select * from employee;
+select Ssn, count(Essn) from employee e, dependent d where (e.Ssn = d.Essn);
+select * from dependent;
+
+SELECT Bdate, Address FROM employee
+WHERE Fname = 'John' AND Minit = 'B' AND Lname = 'Smith';
+
+select * from departament where Dname = 'Research';
+
+SELECT Fname, Lname, Address
+FROM employee, departament
+WHERE Dname = 'Research' AND Dnumber = Dno;
+
+select * from project;
+--
+--
+--
+-- Expressões e concatenação de strings
+--
+--
+-- recuperando informações dos departamentos presentes em Stafford
+select Dname as Department, Mgr_ssn as Manager from departament d, dept_locations l
+where d.Dnumber = l.Dnumber;
+
+-- padrão sql -> || no MySQL usa a função concat()
+select Dname as Department, concat(Fname, ' ', Lname) from departament d, dept_locations l, employee e
+where d.Dnumber = l.Dnumber and Mgr_ssn = e.Ssn;
+
+-- recuperando info dos projetos em Stafford
+select * from project, departament where Dnum = Dnumber and Plocation = 'Stafford';
+
+-- recuperando info sobre os departamentos e projetos localizados em Stafford
+SELECT Pnumber, Dnum, Lname, Address, Bdate
+FROM project, departament, employee
+WHERE Dnum = Dnumber AND Mgr_ssn = Ssn AND
+Plocation = 'Stafford';
+
+SELECT * FROM employee WHERE Dno IN (3,6,9);
+
+--
+--
+-- Operadores lógicos
+--
+--
+
+SELECT Bdate, Address
+FROM EMPLOYEE
+WHERE Fname = ‘John’ AND Minit = ‘B’ AND Lname = ‘Smith’;
+
+SELECT Fname, Lname, Address
+FROM EMPLOYEE, DEPARTMENT
+WHERE Dname = ‘Research’ AND Dnumber = Dno;
+
+--
+--
+-- Expressões e alias
+--
+--
+
+-- recolhendo o valor do INSS-*
+select Fname, Lname, Salary, Salary*0.011 from employee;
+select Fname, Lname, Salary, Salary*0.011 as INSS from employee;
+select Fname, Lname, Salary, round(Salary*0.011,2) as INSS from employee;
+
+-- definir um aumento de salário para os gerentes que trabalham no projeto associado ao ProdutoX
+select e.Fname, e.Lname, 1.1*e.Salary as increased_sal from employee as e,
+works_on as w, project as p where e.Ssn = w.Essn and w.Pno = p.Pnumber and p.Pname='ProductX';
+
+-- concatenando e fornecendo alias
+select Dname as Department, concat(Fname, ' ', Lname) as Manager from departament d, dept_locations l, employee e
+where d.Dnumber = l.Dnumber and Mgr_ssn = e.Ssn;
+
+-- recuperando dados dos empregados que trabalham para o departamento de pesquisa
+select Fname, Lname, Address from employee, departament
+	where Dname = 'Research' and Dnumber = Dno;
+
+-- definindo alias para legibilidade da consulta
+select e.Fname, e.Lname, e.Address from employee e, departament d
+	where d.Dname = 'Research' and d.Dnumber = e.Dno;
